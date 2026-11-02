@@ -1,0 +1,11 @@
+{
+  "name": "pullcut",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Baixa vídeos, trechos ou só o áudio de uma URL, na qualidade escolhida (yt-dlp + FFmpeg).",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "license": "MIT"
+}

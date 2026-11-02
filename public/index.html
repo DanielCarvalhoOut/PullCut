@@ -1,0 +1,805 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PullCut</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e5a93b' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='8' cy='19' r='3'/%3E%3Ccircle cx='16' cy='19' r='3'/%3E%3Cpath d='M9.5 16.5 17 3M14.5 16.5 7 3'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,700;125,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1216;
+    --surface: #161a20;
+    --raised: #1d222a;
+    --line: #2a3039;
+    --line-soft: #222831;
+    --text: #dde2ea;
+    --muted: #7c8595;
+    --faint: #4b5361;
+    --amber: #e5a93b;
+    --amber-dim: #e5a93b26;
+    --ok: #57c48a;
+    --err: #e5626b;
+    --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --display: "Archivo", "Segoe UI", sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  /* Dentro do Painel geral (aba PullCut) o topo do Painel já mostra marca e status. */
+  .embutido .topo { display: none; }
+  .embutido .wrap { padding-top: 4px; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 var(--sans);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px 64px; }
+  .mono { font-family: var(--mono); }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+  /* ---------- topo ---------- */
+  .topo {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    padding: 22px 0 18px; border-bottom: 1px solid var(--line-soft); margin-bottom: 28px;
+  }
+  .marca { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .logo {
+    font-family: var(--display); font-stretch: 125%; font-weight: 800; font-size: 22px;
+    letter-spacing: .02em; text-transform: uppercase; display: flex; align-items: center; user-select: none;
+  }
+  .logo svg { width: 17px; height: 21px; margin: 0 1px; transform: translateY(-1px); }
+  .logo .t { color: var(--amber); }
+  .sub { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .sistema { display: flex; gap: 16px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .sistema span b { font-weight: 500; }
+  .sistema .ok b { color: var(--ok); }
+  .sistema .bad b { color: var(--err); }
+
+  /* ---------- blocos ---------- */
+  .rotulo {
+    font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 10px;
+  }
+  .bloco { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 6px; }
+
+  /* ---------- origem ---------- */
+  .origem { display: flex; align-items: stretch; padding: 4px; gap: 4px; }
+  .origem .prompt { font-family: var(--mono); color: var(--amber); padding: 0 6px 0 12px; display: flex; align-items: center; user-select: none; }
+  .origem input {
+    flex: 1; min-width: 0; background: transparent; border: 0; color: var(--text); font: 14px var(--mono);
+    padding: 12px 6px; outline: none;
+  }
+  .origem input::placeholder { color: var(--faint); }
+  .btn {
+    font-family: var(--mono); font-weight: 600; font-size: 13px; letter-spacing: .04em; text-transform: uppercase;
+    background: var(--amber); color: #1b1408; border: 0; border-radius: 4px; padding: 0 18px; white-space: nowrap;
+  }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:disabled { opacity: .45; cursor: default; filter: none; }
+  .btn .k { opacity: .6; margin-left: 8px; }
+  .nota { font-size: 12px; color: var(--faint); margin: 8px 2px 0; }
+  .erro { font-family: var(--mono); font-size: 12px; color: var(--err); margin: 10px 2px 0; }
+  .erro:empty { display: none; }
+  .erro::before { content: "[!] "; }
+
+  /* ---------- fonte analisada ---------- */
+  #resultado { display: none; margin-top: 28px; }
+  .fonte { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 0; }
+  .monitor video { width: 100%; height: 100%; display: block; background: #000; }
+  .monitor .selo {
+    position: absolute; right: 8px; top: 8px; font: 500 10px var(--mono); color: var(--muted);
+    background: #000b; padding: 2px 6px; border-radius: 2px; letter-spacing: .06em;
+  }
+  .transporte { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .transporte .op { padding: 5px 10px; }
+  .transporte .divisor { width: 1px; height: 22px; background: var(--line); margin: 0 6px; }
+  .tc-atual { margin-left: auto; font: 500 20px var(--mono); letter-spacing: .04em; color: var(--text); }
+  .pista .cabeca { position: absolute; top: -6px; bottom: -6px; width: 2px; margin-left: -1px; background: #fff; pointer-events: none; z-index: 2; }
+  .pista .cabeca::before {
+    content: ""; position: absolute; top: 0; left: -5px;
+    border: 6px solid transparent; border-top-color: #fff; border-bottom: 0;
+  }
+  .pista { cursor: pointer; }
+  .atalhos { font: 11px var(--mono); color: var(--faint); margin: 10px 0 0; }
+  .monitor { position: relative; aspect-ratio: 16/9; background: #000; border-right: 1px solid var(--line-soft); border-radius: 6px 0 0 0; overflow: hidden; }
+  .monitor img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: .92; }
+  .monitor .tc {
+    position: absolute; left: 8px; bottom: 8px; font: 500 11px var(--mono); background: #000b; color: var(--text);
+    padding: 2px 6px; border-radius: 2px; letter-spacing: .04em;
+  }
+  .monitor .canto { position: absolute; width: 10px; height: 10px; border-color: #ffffff59; border-style: solid; }
+  .monitor .c1 { top: 8px; left: 8px; border-width: 1px 0 0 1px; }
+  .monitor .c2 { top: 8px; right: 8px; border-width: 1px 1px 0 0; }
+  .monitor .c3 { bottom: 8px; right: 8px; border-width: 0 1px 1px 0; }
+  .ficha { padding: 18px 20px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+  .ficha h2 { margin: 0; font: 600 17px/1.35 var(--sans); }
+  .dados { display: grid; grid-template-columns: repeat(3, auto); justify-content: start; gap: 4px 28px; font-family: var(--mono); font-size: 12px; }
+  .dados dt { color: var(--faint); text-transform: uppercase; letter-spacing: .1em; font-size: 10px; }
+  .dados dd { margin: 0; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+
+  /* ---------- timeline (assinatura) ---------- */
+  .timeline { border-top: 1px solid var(--line-soft); padding: 16px 20px 18px; }
+  .tl-cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .tl-cab .rotulo { margin: 0; }
+  .regua { position: relative; height: 18px; font: 10px var(--mono); color: var(--faint); }
+  .regua span { position: absolute; top: 0; transform: translateX(-50%); }
+  .regua span:first-child { transform: none; }
+  .regua span:last-child { transform: translateX(-100%); }
+  .pista {
+    position: relative; height: 44px; border-radius: 3px;
+    background:
+      repeating-linear-gradient(90deg, var(--faint) 0 1px, transparent 1px calc(100% / 8)) top left / 100% 12px no-repeat,
+      repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px calc(100% / 40)) top left / 100% 7px no-repeat,
+      var(--raised);
+  }
+  .pista .regiao {
+    position: absolute; top: 0; bottom: 0; background: var(--amber-dim);
+    border-left: 2px solid var(--amber); border-right: 2px solid var(--amber);
+  }
+  .pista .regiao::before, .pista .regiao::after {
+    position: absolute; top: 50%; transform: translateY(-50%); font: 600 12px var(--mono); color: var(--amber);
+  }
+  .pista .regiao::before { content: "[I"; left: 6px; }
+  .pista .regiao::after { content: "O]"; right: 6px; }
+  .pista .regiao.estreita::before { left: auto; right: calc(100% + 6px); }
+  .pista .regiao.estreita::after { right: auto; left: calc(100% + 6px); }
+  .pista.inteiro .regiao { background: transparent; border-color: var(--faint); }
+  .pista.inteiro .regiao::before, .pista.inteiro .regiao::after { color: var(--faint); }
+  .pista input[type=range] {
+    position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; background: none;
+    -webkit-appearance: none; appearance: none; pointer-events: none;
+  }
+  .pista input[type=range]::-webkit-slider-runnable-track { background: none; height: 100%; }
+  .pista input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; pointer-events: auto; width: 14px; height: 44px; background: transparent; cursor: ew-resize;
+  }
+  .pista input[type=range]::-moz-range-thumb { pointer-events: auto; width: 14px; height: 44px; background: transparent; border: 0; cursor: ew-resize; }
+  .pista input[type=range]:focus-visible { outline: none; }
+  .pista:focus-within { outline: 1px solid var(--amber); outline-offset: 2px; }
+  .pista.inteiro input { pointer-events: none; }
+  .pista.inteiro input::-webkit-slider-thumb { pointer-events: none; }
+  .pista.inteiro input::-moz-range-thumb { pointer-events: none; }
+
+  .leitura { display: flex; gap: 6px 28px; flex-wrap: wrap; margin-top: 12px; align-items: center; font-family: var(--mono); }
+  .leitura label { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--faint); letter-spacing: .1em; }
+  .leitura input {
+    width: 92px; background: var(--raised); border: 1px solid var(--line); border-radius: 3px; color: var(--text);
+    font: 500 14px var(--mono); padding: 5px 8px; text-align: center; letter-spacing: .03em;
+  }
+  .leitura input:focus { outline: none; border-color: var(--amber); }
+  .leitura input:disabled { color: var(--faint); }
+  .leitura .dur { font-size: 14px; font-weight: 500; color: var(--amber); }
+  .pista.inteiro ~ .leitura .dur { color: var(--text); }
+  .corte { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+  .rot-corte { font-size: 11px; color: var(--faint); letter-spacing: .1em; }
+  .dica { font: 12px var(--mono); color: var(--muted); margin: 10px 0 0; }
+  .dica::before { content: "[i] "; color: var(--amber); }
+
+  /* ---------- saída ---------- */
+  .saida { border-top: 1px solid var(--line-soft); padding: 16px 20px 20px; display: grid; gap: 18px; }
+  .linha { display: grid; grid-template-columns: 110px 1fr; gap: 12px; align-items: start; }
+  .linha .rotulo { margin: 7px 0 0; }
+  .opcoes { display: flex; flex-wrap: wrap; gap: 6px; }
+  .op {
+    font: 500 13px var(--mono); background: transparent; border: 1px solid var(--line); border-radius: 3px;
+    padding: 6px 12px; color: var(--muted);
+  }
+  .op .ic { color: var(--faint); margin-right: 6px; }
+  .op:hover { color: var(--text); border-color: var(--faint); }
+  .op[aria-pressed=true] { color: var(--text); border-color: var(--amber); background: var(--amber-dim); }
+  .op[aria-pressed=true] .ic { color: var(--amber); }
+  .op:disabled { opacity: .35; cursor: default; }
+  .op .cam { display: block; font-size: 10px; color: var(--faint); margin-top: 1px; font-weight: 400; }
+  .rodape { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-top: 1px solid var(--line-soft); padding: 14px 20px; }
+  .resumo { font: 12px var(--mono); color: var(--muted); }
+  .resumo b { color: var(--text); font-weight: 500; }
+  .rodape .btn { padding: 11px 22px; }
+
+  /* ---------- fila ---------- */
+  .fila-cab { display: flex; justify-content: space-between; align-items: baseline; margin: 40px 0 10px; }
+  .fila-cab .rotulo { margin: 0; }
+  .contagem { font: 11px var(--mono); color: var(--faint); }
+  #fila { border-top: 1px solid var(--line-soft); }
+  .vazio { font: 13px var(--mono); color: var(--faint); padding: 22px 2px; }
+  .job {
+    display: grid; grid-template-columns: 28px 1fr 230px auto; gap: 16px; align-items: center;
+    padding: 14px 2px; border-bottom: 1px solid var(--line-soft); font-family: var(--mono); font-size: 12px;
+  }
+  .job .st { color: var(--amber); font-weight: 600; text-align: center; }
+  .job.concluido .st { color: var(--ok); }
+  .job.erro .st, .job.cancelado .st { color: var(--err); }
+  .job .nome { font: 500 14px var(--sans); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .job .spec { color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .job .spec .seta { color: var(--faint); }
+  .job .msg-erro { color: var(--err); margin-top: 4px; white-space: normal; word-break: break-word; }
+  .barra { white-space: pre; color: var(--amber); letter-spacing: -.02em; }
+  .barra .vazia { color: var(--faint); }
+  .job.concluido .barra { color: var(--ok); }
+  .job.erro .barra, .job.cancelado .barra { color: var(--err); }
+  .job .meta { color: var(--faint); margin-top: 2px; }
+  .acoes { display: flex; gap: 6px; }
+  .acao { font: 500 12px var(--mono); background: transparent; border: 1px solid var(--line); border-radius: 3px; color: var(--muted); padding: 5px 10px; }
+  .acao:hover { color: var(--text); border-color: var(--faint); }
+
+  @media (max-width: 760px) {
+    .fonte { grid-template-columns: 1fr; }
+    .monitor { border-right: 0; border-bottom: 1px solid var(--line-soft); border-radius: 6px 6px 0 0; }
+    .dados { grid-template-columns: repeat(2, auto); }
+    .linha { grid-template-columns: 1fr; gap: 8px; }
+    .linha .rotulo { margin: 0; }
+    .job { grid-template-columns: 22px 1fr; }
+    .job .progresso, .job .acoes { grid-column: 2; }
+    .sistema { width: 100%; }
+  }
+  @media (max-width: 480px) {
+    .origem { flex-wrap: wrap; }
+    .origem input { flex-basis: calc(100% - 40px); }
+    .origem .btn { width: 100%; padding: 11px; }
+    .timeline, .saida, .rodape, .ficha { padding-left: 14px; padding-right: 14px; }
+    .rodape .btn { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="topo">
+    <div class="marca">
+      <div class="logo" aria-label="PullCut">
+        PullC<svg viewBox="0 0 24 28" fill="none" stroke="#e5a93b" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="22" r="3.6"/><circle cx="17" cy="22" r="3.6"/><path d="M9 18.6 17.5 2.5M15 18.6 6.5 2.5"/></svg><span class="t">t</span>
+      </div>
+      <span class="sub">// baixar vídeo, trecho ou áudio a partir de uma URL</span>
+    </div>
+    <div class="sistema" id="sistema"></div>
+  </header>
+
+  <p class="rotulo">Origem</p>
+  <form class="bloco origem" id="formBusca">
+    <span class="prompt" aria-hidden="true">&gt;_</span>
+    <input type="text" id="url" placeholder="cole a URL do vídeo" autocomplete="off" spellcheck="false" autofocus aria-label="URL do vídeo">
+    <button class="btn" id="btnAnalisar" type="submit">Analisar<span class="k">↵</span></button>
+  </form>
+  <p class="erro" id="msgBusca"></p>
+  <p class="nota">Baixe apenas conteúdo seu, com licença livre ou com autorização do autor.</p>
+
+  <section id="resultado" aria-live="polite">
+    <p class="rotulo">Fonte</p>
+    <div class="bloco">
+      <div class="fonte">
+        <div class="monitor">
+          <img id="vThumb" alt="">
+          <video id="player" preload="metadata" playsinline hidden></video>
+          <audio id="somPrevia" preload="auto" hidden></audio>
+          <span class="canto c1"></span><span class="canto c2"></span><span class="canto c3"></span>
+          <span class="tc" id="vDur"></span>
+          <span class="selo" id="seloPrevia" hidden></span>
+        </div>
+        <div class="ficha">
+          <h2 id="vTitulo"></h2>
+          <dl class="dados">
+            <div><dt>Canal</dt><dd id="vCanal"></dd></div>
+            <div><dt>Site</dt><dd id="vSite"></dd></div>
+            <div><dt>Duração</dt><dd id="vDuracao"></dd></div>
+            <div><dt>Máx.</dt><dd id="vMax"></dd></div>
+            <div><dt>Áudio</dt><dd id="vAudio"></dd></div>
+          </dl>
+        </div>
+      </div>
+
+      <div class="timeline">
+        <div class="tl-cab">
+          <p class="rotulo">Trecho</p>
+          <div class="opcoes" data-grupo="parte">
+            <button type="button" class="op" data-valor="inteiro" aria-pressed="true"><span class="ic">[—]</span>Inteiro</button>
+            <button type="button" class="op" data-valor="trecho" aria-pressed="false"><span class="ic">[✂]</span>Só um trecho</button>
+          </div>
+        </div>
+        <div class="transporte" id="transporte" hidden>
+          <button type="button" class="op" id="bIrIn" title="Ir para a entrada (Home)">[|&lt;]</button>
+          <button type="button" class="op" id="bPlay" title="Reproduzir / pausar (espaço)">[&gt;]</button>
+          <button type="button" class="op" id="bIrOut" title="Ir para a saída (End)">[&gt;|]</button>
+          <button type="button" class="op" id="bLoop" aria-pressed="false" title="Repetir o trecho">[⟲] loop</button>
+          <span class="divisor"></span>
+          <button type="button" class="op" id="bMarcaIn" title="Marcar a entrada no ponto atual (I)">[I marcar</button>
+          <button type="button" class="op" id="bMarcaOut" title="Marcar a saída no ponto atual (O)">marcar O]</button>
+          <span class="tc-atual" id="tcAtual">00:00:00</span>
+        </div>
+        <div class="regua" id="regua"></div>
+        <div class="pista inteiro" id="pista">
+          <div class="regiao" id="regiao"></div>
+          <div class="cabeca" id="cabeca" hidden></div>
+          <input type="range" id="rIni" min="0" step="1" aria-label="Ponto de entrada">
+          <input type="range" id="rFim" min="0" step="1" aria-label="Ponto de saída">
+        </div>
+        <div class="leitura">
+          <label>IN <input type="text" id="tIni" value="00:00:00" aria-label="Entrada" disabled></label>
+          <label>OUT <input type="text" id="tFim" aria-label="Saída" disabled></label>
+          <label>DUR <span class="dur" id="tDur">00:00:00</span></label>
+          <div class="corte" id="grupoCorte" hidden>
+            <span class="rot-corte">CORTE</span>
+            <div class="opcoes" data-grupo="corte">
+              <button type="button" class="op" data-valor="rapido" aria-pressed="true" title="Copia o trecho sem recodificar. Pode começar até alguns segundos antes do IN.">Rápido</button>
+              <button type="button" class="op" data-valor="preciso" aria-pressed="false" title="Recodifica para cortar no quadro exato. Lento em resoluções altas.">Preciso</button>
+            </div>
+          </div>
+        </div>
+        <p class="dica" id="dicaCorte" hidden></p>
+        <p class="atalhos" id="atalhos" hidden>espaço reproduz · I marca entrada · O marca saída · ← → 1 s · shift 5 s · clique na timeline para ir ao ponto</p>
+      </div>
+
+      <div class="saida">
+        <div class="linha">
+          <p class="rotulo">Tipo</p>
+          <div class="opcoes" data-grupo="tipo">
+            <button type="button" class="op" data-valor="video" aria-pressed="true"><span class="ic">[&gt;]</span>Vídeo</button>
+            <button type="button" class="op" data-valor="audio" aria-pressed="false"><span class="ic">[~]</span>Só áudio</button>
+          </div>
+        </div>
+        <div class="linha" id="grupoQualidade">
+          <p class="rotulo">Qualidade</p>
+          <div class="opcoes" data-grupo="altura" id="opAltura"></div>
+        </div>
+        <div class="linha" id="grupoAudio" hidden>
+          <p class="rotulo">Formato</p>
+          <div class="opcoes" data-grupo="formatoAudio">
+            <button type="button" class="op" data-valor="mp3" aria-pressed="true">MP3</button>
+            <button type="button" class="op" data-valor="m4a" aria-pressed="false">M4A</button>
+            <button type="button" class="op" data-valor="wav" aria-pressed="false">WAV</button>
+          </div>
+        </div>
+        <div class="linha">
+          <p class="rotulo">Salvar em</p>
+          <div class="opcoes" data-grupo="destino" id="opDestino"></div>
+        </div>
+      </div>
+
+      <div class="rodape">
+        <span class="resumo" id="resumo"></span>
+        <button class="btn" id="btnBaixar" type="button">Baixar<span class="k">↓</span></button>
+      </div>
+    </div>
+    <p class="erro" id="msgBaixar"></p>
+  </section>
+
+  <div class="fila-cab">
+    <p class="rotulo">Downloads</p>
+    <span class="contagem" id="contagem"></span>
+  </div>
+  <div id="fila"><div class="vazio">Nenhum download ainda. Cole uma URL acima para começar.</div></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+if (window.top !== window.self) document.documentElement.classList.add('embutido');
+
+// Aberta direto pelo arquivo (ou numa prévia), a página não tem servidor por trás: as chamadas
+// /api/... não têm para onde ir. Se o PullCut estiver rodando, redireciona; senão, explica o que fazer.
+const SERVIDOR = 'http://127.0.0.1:4747';
+const foraDoServidor = !/^https?:$/.test(location.protocol);
+if (foraDoServidor) {
+  fetch(`${SERVIDOR}/api/estado`, { mode: 'no-cors' })
+    .then(() => location.replace(SERVIDOR))
+    .catch(() => {
+      $('msgBusca').textContent = 'O PullCut não está rodando. Feche esta página e dê dois cliques em PullCut.cmd, na pasta do PullCut.';
+    });
+}
+
+const estado = { info: null, tipo: 'video', altura: null, formatoAudio: 'mp3', parte: 'inteiro', corte: 'rapido', destino: 'pullcut', destinos: [] };
+const tarefas = new Map();
+
+const p2 = (n) => String(n).padStart(2, '0');
+function tc(seg) {
+  seg = Math.max(0, Math.round(seg || 0));
+  return `${p2(Math.floor(seg / 3600))}:${p2(Math.floor(seg / 60) % 60)}:${p2(seg % 60)}`;
+}
+function paraSeg(t) {
+  const partes = String(t).trim().split(':');
+  if (!partes.length || partes.length > 3 || partes.some((p) => !/^\d+(\.\d+)?$/.test(p))) return NaN;
+  return partes.reduce((a, p) => a * 60 + Number(p), 0);
+}
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+async function api(caminho, corpo) {
+  if (foraDoServidor) throw new Error('O PullCut não está rodando. Dê dois cliques em PullCut.cmd e use a página que ele abrir.');
+  const r = await fetch(caminho, corpo ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) } : undefined).catch(() => {
+    throw new Error('O servidor do PullCut parou. Dê dois cliques em PullCut.cmd e recarregue esta página.');
+  });
+  const dados = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(dados.erro || `Erro ${r.status}`);
+  return dados;
+}
+
+// ---- grupos de opções ----
+document.querySelectorAll('.opcoes[data-grupo]').forEach((grupo) => {
+  grupo.addEventListener('click', (e) => {
+    const b = e.target.closest('.op');
+    if (!b || b.disabled) return;
+    grupo.querySelectorAll('.op').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+    const nome = grupo.dataset.grupo;
+    const v = b.dataset.valor;
+    estado[nome] = v === '' ? null : (nome === 'altura' ? Number(v) : v);
+    atualizar();
+  });
+});
+
+function atualizar() {
+  $('grupoQualidade').hidden = estado.tipo === 'audio';
+  $('grupoAudio').hidden = estado.tipo !== 'audio';
+  const trecho = estado.parte === 'trecho';
+  $('pista').classList.toggle('inteiro', !trecho);
+  $('tIni').disabled = $('tFim').disabled = !trecho;
+  if (!trecho && estado.info) { $('rIni').value = 0; $('rFim').value = $('rFim').max; sincronizar(); }
+  $('grupoCorte').hidden = !trecho;
+  // Aviso só quando o corte preciso vai recodificar vídeo acima de 1080p — é aí que fica lento.
+  const pesado = trecho && estado.corte === 'preciso' && estado.tipo === 'video' && (estado.altura || 9999) > 1080;
+  $('dicaCorte').hidden = !pesado;
+  $('dicaCorte').textContent = pesado ? `Corte preciso em ${estado.altura ? estado.altura + 'p' : 'resolução máxima'} recodifica o vídeo e pode levar muitos minutos neste PC. Para ser rápido, use o corte Rápido ou 1080p.` : '';
+  desenharResumo();
+}
+
+function desenharResumo() {
+  if (!estado.info) return;
+  const tipo = estado.tipo === 'audio' ? `áudio ${estado.formatoAudio.toUpperCase()}` : `vídeo ${estado.altura ? estado.altura + 'p' : 'melhor'} MP4`;
+  const dur = estado.parte === 'trecho' ? `${$('tIni').value} → ${$('tFim').value} · corte ${estado.corte === 'preciso' ? 'preciso' : 'rápido'}` : 'inteiro';
+  const dest = estado.destinos.find((d) => d.id === estado.destino)?.nome || '';
+  $('resumo').innerHTML = `<b>${esc(tipo)}</b> · ${esc(dur)} · → ${esc(dest)}`;
+}
+
+// ---- sistema ----
+async function carregarEstado() {
+  const e = await api('/api/estado');
+  estado.destinos = e.destinos;
+  $('sistema').innerHTML =
+    `<span class="${e.ytdlp ? 'ok' : 'bad'}">yt-dlp <b>${e.ytdlp ? '[ok]' : '[--]'}</b></span>` +
+    `<span class="${e.ffmpeg ? 'ok' : 'bad'}">ffmpeg <b>${e.ffmpeg ? '[ok]' : '[--]'}</b></span>`;
+  $('opDestino').innerHTML = e.destinos.map((d) =>
+    `<button type="button" class="op" data-valor="${d.id}" aria-pressed="${d.id === estado.destino}" ${d.disponivel ? '' : 'disabled'} title="${esc(d.pasta)}">${esc(d.nome)}<span class="cam">${esc(abreviar(d.pasta))}</span></button>`
+  ).join('');
+  e.tarefas.forEach((t) => tarefas.set(t.id, t));
+  desenharFila();
+}
+function abreviar(p) {
+  const partes = p.split('\\');
+  return partes.length > 3 ? `${partes[0]}\\…\\${partes.slice(-2).join('\\')}` : p;
+}
+
+// ---- análise ----
+$('formBusca').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const url = $('url').value.trim();
+  if (!url) return;
+  $('msgBusca').textContent = '';
+  $('btnAnalisar').disabled = true;
+  $('btnAnalisar').firstChild.textContent = 'Analisando';
+  try {
+    mostrar(await api('/api/analisar', { url }));
+  } catch (e) {
+    $('resultado').style.display = 'none';
+    $('msgBusca').textContent = e.message;
+  } finally {
+    $('btnAnalisar').disabled = false;
+    $('btnAnalisar').firstChild.textContent = 'Analisar';
+  }
+});
+
+function mostrar(info) {
+  estado.info = info;
+  $('vThumb').src = info.miniatura || '';
+  $('vThumb').style.visibility = info.miniatura ? 'visible' : 'hidden';
+  configurarPlayer(info);
+  $('vDur').textContent = info.aoVivo ? 'AO VIVO' : tc(info.duracao);
+  $('vTitulo').textContent = info.titulo || 'Sem título';
+  $('vCanal').textContent = info.canal || '—';
+  $('vSite').textContent = info.site || '—';
+  $('vDuracao').textContent = info.duracao ? tc(info.duracao) : '—';
+  $('vMax').textContent = info.alturas?.length ? `${info.alturas[0]}p` : '—';
+  $('vAudio').textContent = info.temAudio ? 'sim' : 'não';
+
+  const alturas = info.alturas || [];
+  estado.altura = alturas[0] || null;
+  const nomes = { 4320: '8K', 2160: '4K', 1440: '2K' };
+  $('opAltura').innerHTML = alturas.length
+    ? alturas.map((h, i) => `<button type="button" class="op" data-valor="${h}" aria-pressed="${i === 0}">${h}p${nomes[h] ? ` <span class="ic" style="margin:0">${nomes[h]}</span>` : ''}</button>`).join('')
+    : `<button type="button" class="op" data-valor="" aria-pressed="true">melhor disponível</button>`;
+
+  const dur = Math.floor(info.duracao || 0);
+  const opTrecho = document.querySelector('[data-grupo=parte] [data-valor=trecho]');
+  opTrecho.disabled = !dur;
+  if (!dur && estado.parte === 'trecho') document.querySelector('[data-grupo=parte] [data-valor=inteiro]').click();
+  $('rIni').max = $('rFim').max = dur;
+  $('rIni').value = 0; $('rFim').value = dur;
+  desenharRegua(dur);
+  sincronizar();
+
+  $('msgBaixar').textContent = '';
+  $('resultado').style.display = 'block';
+  atualizar();
+}
+
+function desenharRegua(dur) {
+  if (!dur) return ($('regua').innerHTML = '');
+  const marcas = 8;
+  let html = '';
+  for (let i = 0; i <= marcas; i++) {
+    const s = (dur * i) / marcas;
+    const rot = dur >= 3600 ? tc(s) : tc(s).slice(3);
+    html += `<span style="left:${(i / marcas) * 100}%">${rot}</span>`;
+  }
+  $('regua').innerHTML = html;
+}
+
+// ---- timeline ----
+function sincronizar(origem) {
+  let a = Number($('rIni').value), b = Number($('rFim').value);
+  if (a > b) { if (origem === 'ini') $('rIni').value = a = b; else $('rFim').value = b = a; }
+  const max = Number($('rIni').max) || 1;
+  $('regiao').style.left = `${(a / max) * 100}%`;
+  $('regiao').style.width = `${((b - a) / max) * 100}%`;
+  // Trecho curto: as etiquetas [I e O] vão para fora da região para não se sobreporem.
+  $('regiao').classList.toggle('estreita', $('regiao').offsetWidth < 64);
+  if (origem !== 'texto') { $('tIni').value = tc(a); $('tFim').value = tc(b); }
+  $('tDur').textContent = tc(b - a);
+  desenharResumo();
+}
+// Arrastar uma alça mostra no monitor o quadro daquele ponto, como no editor.
+$('rIni').addEventListener('input', () => { sincronizar('ini'); irPara(Number($('rIni').value), true); });
+$('rFim').addEventListener('input', () => { sincronizar('fim'); irPara(Number($('rFim').value), true); });
+for (const [id, r] of [['tIni', 'rIni'], ['tFim', 'rFim']]) {
+  $(id).addEventListener('change', () => {
+    const s = paraSeg($(id).value);
+    if (Number.isNaN(s)) { $(id).value = tc($(r).value); return; }
+    $(r).value = Math.min(s, Number($(r).max));
+    $(id).value = tc($(r).value);
+    sincronizar('texto');
+  });
+}
+
+// ---- monitor / player ----
+const player = $('player');
+// Quando o site entrega vídeo e áudio separados, o áudio toca neste elemento seguindo o vídeo.
+const som = $('somPrevia');
+const temSom = () => Boolean(som.getAttribute('src'));
+let temPrevia = false;
+let quadroPlayer = null;
+
+function configurarPlayer(info) {
+  player.pause();
+  temPrevia = Boolean(info.previa) && !info.aoVivo;
+  $('transporte').hidden = $('cabeca').hidden = $('atalhos').hidden = !temPrevia;
+  $('seloPrevia').hidden = false;
+  som.pause();
+  if (info.previa?.audio) som.src = `/api/previa/${info.previa.audio}`;
+  else { som.removeAttribute('src'); som.load(); }
+  if (temPrevia) {
+    player.poster = info.miniatura || '';
+    player.src = `/api/previa/${info.previa.video}`;
+    player.hidden = false;
+    $('vThumb').hidden = true;
+    $('seloPrevia').textContent = `PRÉVIA ${info.previa.altura ? info.previa.altura + 'p' : ''}`.trim();
+  } else {
+    player.removeAttribute('src');
+    player.load();
+    player.hidden = true;
+    $('vThumb').hidden = false;
+    $('seloPrevia').textContent = 'SEM PRÉVIA';
+  }
+  atualizarCabeca();
+}
+
+const entrada = () => Number($('rIni').value);
+const saida = () => Number($('rFim').value);
+const emTrecho = () => estado.parte === 'trecho';
+
+function irPara(s, pausar = false) {
+  if (!temPrevia) return;
+  if (pausar) player.pause();
+  player.currentTime = Math.max(0, Math.min(s, Number($('rFim').max) || s));
+  if (temSom()) som.currentTime = player.currentTime;
+  atualizarCabeca();
+}
+
+function atualizarCabeca() {
+  const max = Number($('rIni').max) || 0;
+  const t = temPrevia ? player.currentTime : 0;
+  $('cabeca').style.left = max ? `${(t / max) * 100}%` : '0';
+  $('tcAtual').textContent = tc(t);
+  if (temPrevia) $('vDur').textContent = `${tc(t)} / ${tc(estado.info?.duracao)}`;
+  $('bPlay').textContent = player.paused ? '[>]' : '[||]';
+}
+
+// Enquanto toca, acompanha a cada quadro: move a cabeça e para (ou repete) exatamente no OUT.
+function acompanhar() {
+  if (emTrecho() && player.currentTime >= saida()) {
+    if ($('bLoop').getAttribute('aria-pressed') === 'true') irPara(entrada());
+    else { player.pause(); irPara(saida()); }
+  }
+  // Corrige o áudio separado se ele se afastar do vídeo.
+  if (temSom() && !player.paused && Math.abs(som.currentTime - player.currentTime) > 0.25) som.currentTime = player.currentTime;
+  atualizarCabeca();
+  quadroPlayer = player.paused ? null : requestAnimationFrame(acompanhar);
+}
+player.addEventListener('play', () => { cancelAnimationFrame(quadroPlayer); quadroPlayer = requestAnimationFrame(acompanhar); });
+player.addEventListener('playing', () => { if (temSom()) { som.currentTime = player.currentTime; som.play().catch(() => {}); } });
+player.addEventListener('waiting', () => { if (temSom()) som.pause(); });
+player.addEventListener('pause', () => { if (temSom()) som.pause(); atualizarCabeca(); });
+player.addEventListener('seeked', atualizarCabeca);
+player.addEventListener('error', () => {
+  if (!temPrevia) return;
+  temPrevia = false;
+  $('transporte').hidden = $('cabeca').hidden = $('atalhos').hidden = true;
+  player.hidden = true;
+  $('vThumb').hidden = false;
+  $('seloPrevia').textContent = 'PRÉVIA INDISPONÍVEL';
+});
+
+function tocarPausar() {
+  if (!temPrevia) return;
+  if (!player.paused) return player.pause();
+  // No modo trecho, tocar fora do trecho volta para o IN, como "play in to out" no editor.
+  if (emTrecho() && (player.currentTime < entrada() || player.currentTime >= saida() - 0.05)) irPara(entrada());
+  player.play().catch(() => {});
+}
+
+function ativarTrecho() {
+  if (!emTrecho()) document.querySelector('[data-grupo=parte] [data-valor=trecho]').click();
+}
+function marcarEntrada() {
+  if (!temPrevia) return;
+  ativarTrecho();
+  $('rIni').value = Math.floor(player.currentTime);
+  if (entrada() >= saida()) $('rFim').value = $('rFim').max;
+  sincronizar('ini');
+}
+function marcarSaida() {
+  if (!temPrevia) return;
+  ativarTrecho();
+  $('rFim').value = Math.ceil(player.currentTime);
+  if (saida() <= entrada()) $('rIni').value = 0;
+  sincronizar('fim');
+}
+
+$('bPlay').addEventListener('click', tocarPausar);
+$('bIrIn').addEventListener('click', () => irPara(emTrecho() ? entrada() : 0, true));
+$('bIrOut').addEventListener('click', () => irPara(emTrecho() ? saida() : Number($('rFim').max), true));
+$('bLoop').addEventListener('click', () => $('bLoop').setAttribute('aria-pressed', String($('bLoop').getAttribute('aria-pressed') !== 'true')));
+$('bMarcaIn').addEventListener('click', marcarEntrada);
+$('bMarcaOut').addEventListener('click', marcarSaida);
+player.addEventListener('click', tocarPausar);
+
+// Clique na timeline (fora das alças) leva a cabeça até aquele ponto.
+$('pista').addEventListener('pointerdown', (e) => {
+  if (!temPrevia || e.target.tagName === 'INPUT') return;
+  const r = $('pista').getBoundingClientRect();
+  irPara(((e.clientX - r.left) / r.width) * (Number($('rIni').max) || 0));
+});
+
+document.addEventListener('keydown', (e) => {
+  if (!temPrevia || $('resultado').style.display !== 'block') return;
+  if (e.target.closest('input[type=text], textarea') || e.ctrlKey || e.metaKey || e.altKey) return;
+  const passo = e.shiftKey ? 5 : 1;
+  const acoes = {
+    ' ': tocarPausar,
+    i: marcarEntrada,
+    o: marcarSaida,
+    ArrowLeft: () => irPara(player.currentTime - passo, true),
+    ArrowRight: () => irPara(player.currentTime + passo, true),
+    Home: () => $('bIrIn').click(),
+    End: () => $('bIrOut').click(),
+  };
+  const acao = acoes[e.key.length === 1 ? e.key.toLowerCase() : e.key];
+  if (!acao) return;
+  // Setas sobre uma alça da timeline continuam movendo a alça.
+  if (e.target.type === 'range' && e.key.startsWith('Arrow')) return;
+  e.preventDefault();
+  acao();
+});
+
+// ---- baixar ----
+$('btnBaixar').addEventListener('click', async () => {
+  const info = estado.info;
+  if (!info) return;
+  const corpo = {
+    url: info.url, titulo: info.titulo, miniatura: info.miniatura, duracao: info.duracao,
+    tipo: estado.tipo, altura: estado.altura, formatoAudio: estado.formatoAudio, destino: estado.destino,
+  };
+  if (estado.parte === 'trecho') {
+    const ini = paraSeg($('tIni').value), fim = paraSeg($('tFim').value);
+    if (Number.isNaN(ini) || Number.isNaN(fim)) return ($('msgBaixar').textContent = 'Tempo inválido. Use 00:01:30.');
+    if (fim <= ini) return ($('msgBaixar').textContent = 'A saída (OUT) precisa ser depois da entrada (IN).');
+    corpo.trecho = { inicio: $('tIni').value, fim: $('tFim').value };
+    corpo.preciso = estado.corte === 'preciso';
+  }
+  $('msgBaixar').textContent = '';
+  $('btnBaixar').disabled = true;
+  try {
+    const t = await api('/api/baixar', corpo);
+    tarefas.set(t.id, t);
+    desenharFila();
+  } catch (e) {
+    $('msgBaixar').textContent = e.message;
+  } finally {
+    $('btnBaixar').disabled = false;
+  }
+});
+
+// ---- fila ----
+const GIRO = ['|', '/', '-', '\\'];
+let quadro = 0;
+const NOMES = { baixando: 'baixando', processando: 'processando', concluido: 'concluído', erro: 'erro', cancelado: 'cancelado' };
+
+function barra(pct, larg = 24) {
+  const cheio = Math.round((Math.max(0, Math.min(100, pct)) / 100) * larg);
+  return `[${'#'.repeat(cheio)}<span class="vazia">${'·'.repeat(larg - cheio)}</span>]`;
+}
+function simbolo(t) {
+  if (t.estado === 'concluido') return '[✓]';
+  if (t.estado === 'erro') return '[!]';
+  if (t.estado === 'cancelado') return '[x]';
+  return `[${GIRO[quadro % 4]}]`;
+}
+
+function desenharFila() {
+  const lista = [...tarefas.values()].sort((a, b) => b.id - a.id);
+  const ativos = lista.filter((t) => t.estado === 'baixando' || t.estado === 'processando').length;
+  $('contagem').textContent = lista.length ? `${ativos} ativo${ativos === 1 ? '' : 's'} · ${lista.length} no total` : '';
+  if (!lista.length) return ($('fila').innerHTML = '<div class="vazio">Nenhum download ainda. Cole uma URL acima para começar.</div>');
+  $('fila').innerHTML = lista.map((t) => {
+    const ativo = t.estado === 'baixando' || t.estado === 'processando';
+    const meta = ativo
+      ? [`${Math.floor(t.progresso)}%`, NOMES[t.estado], t.velocidade, t.restante && `faltam ${t.restante}`].filter(Boolean).join(' · ')
+      : NOMES[t.estado];
+    return `<div class="job ${t.estado}">
+      <span class="st" data-st="${t.id}">${simbolo(t)}</span>
+      <div style="min-width:0">
+        <div class="nome" title="${esc(t.titulo)}">${esc(t.titulo)}</div>
+        <div class="spec">${esc(t.descricao)} <span class="seta">→</span> ${esc(t.destino)}</div>
+        ${t.erro ? `<div class="msg-erro">${esc(t.erro)}</div>` : ''}
+      </div>
+      <div class="progresso">
+        <div class="barra">${barra(t.progresso)}</div>
+        <div class="meta">${esc(meta)}</div>
+      </div>
+      <div class="acoes">
+        ${ativo ? `<button class="acao" data-acao="cancelar" data-id="${t.id}">[x] cancelar</button>` : ''}
+        ${t.estado === 'concluido' ? `<button class="acao" data-acao="abrir" data-id="${t.id}">[/] abrir pasta</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+$('fila').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-acao]');
+  if (b) api(`/api/tarefas/${b.dataset.id}/${b.dataset.acao}`, {}).catch(() => {});
+});
+
+// Spinner ASCII só nas linhas ativas; desligado se o sistema pede menos movimento.
+if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  setInterval(() => {
+    quadro++;
+    for (const t of tarefas.values()) {
+      if (t.estado !== 'baixando' && t.estado !== 'processando') continue;
+      const el = document.querySelector(`[data-st="${t.id}"]`);
+      if (el) el.textContent = simbolo(t);
+    }
+  }, 120);
+}
+
+// ---- tempo real ----
+if (!foraDoServidor) {
+  const eventos = new EventSource('/api/eventos');
+  eventos.onmessage = (e) => {
+    const t = JSON.parse(e.data);
+    tarefas.set(t.id, t);
+    desenharFila();
+  };
+  carregarEstado().catch(() => ($('msgBusca').textContent = 'O servidor do PullCut parou. Dê dois cliques em PullCut.cmd e recarregue esta página.'));
+}
+</script>
+</body>
+</html>

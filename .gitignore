@@ -1,0 +1,18 @@
+# Configuração pessoal (pastas do seu PC). Copie pullcut.config.exemplo.json.
+pullcut.config.json
+
+# yt-dlp: baixe da release oficial e confira o SHA-256 (veja o README). Fica só a lista de hashes.
+bin/*
+!bin/.gitkeep
+!bin/SHA2-256SUMS
+
+# O que você baixou
+downloads/
+
+node_modules/
+*.log
+*.part
+*.ytdl
+.DS_Store
+Thumbs.db
+desktop.ini
