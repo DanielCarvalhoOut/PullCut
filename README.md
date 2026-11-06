@@ -2,7 +2,7 @@
 
 Baixa vídeos de uma URL: o vídeo inteiro ou só um trecho, na qualidade escolhida, ou só o áudio.
 É uma interface local (só no seu PC) para o [yt-dlp](https://github.com/yt-dlp/yt-dlp). Funciona sozinho ou como a aba de
-captura do [Painel](https://github.com/), o estúdio de vídeo que manda o processamento pesado para o Google Colab.
+captura do [Painel](https://github.com/DanielCarvalhoOut/Painel), o estúdio de vídeo que manda o processamento pesado para o Google Colab.
 
 O PullCut tem licença MIT. O motor de download é o yt-dlp (Unlicense, dos autores do yt-dlp), instalado à parte, assim como o FFmpeg.
 
@@ -62,4 +62,4 @@ os termos de cada site. O yt-dlp não contorna DRM (Netflix, Disney+ etc. não f
 
 ## No Painel
 
-O [Painel](https://github.com/) usa o PullCut como plugin, pela API HTTP (`/api/estado`, `/api/analisar`, `/api/baixar`…), e o liga sozinho se estiver desligado. Para isso, deixe a pasta do PullCut ao lado da do Painel, ou aponte `plugins.pullcut.app` no `painel.config.json`.
+O [Painel](https://github.com/DanielCarvalhoOut/Painel) usa o PullCut como plugin, pela API HTTP (`/api/estado`, `/api/analisar`, `/api/baixar`…), e o liga sozinho se estiver desligado. Para isso, deixe a pasta do PullCut ao lado da do Painel, ou aponte `plugins.pullcut.app` no `painel.config.json`.
