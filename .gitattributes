@@ -1,0 +1,9 @@
+# Quebras de linha iguais para todo mundo, qualquer que seja o core.autocrlf de quem clona.
+* text=auto
+
+# Roda no cmd do Windows: CRLF evita rótulos e "goto" quebrados.
+*.cmd   text eol=crlf
+*.bat   text eol=crlf
+
+*.png   binary
+*.exe   binary

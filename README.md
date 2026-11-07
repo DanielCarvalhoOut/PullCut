@@ -55,6 +55,20 @@ Detalhes:
 Atualizar o yt-dlp (os sites mudam com frequência): baixar a nova `yt-dlp.exe` da
 [release oficial](https://github.com/yt-dlp/yt-dlp/releases) e conferir o SHA256, ou rodar `bin\yt-dlp.exe -U`.
 
+## Segurança
+
+Escutar só em `127.0.0.1` não basta: uma página aberta no navegador ainda consegue mandar pedidos para o PC. Por isso o servidor também:
+
+- só aceita os `Host` `127.0.0.1`, `localhost` e `[::1]` na porta dele (barra DNS rebinding);
+- aceita só GET, HEAD e POST; o pré-voo de CORS (OPTIONS) é recusado, então nenhum outro site ganha licença;
+- recusa pedidos à API vindos de outro site ou de outra porta de localhost (`Sec-Fetch-Site`);
+- nos POST, exige `Origin` do próprio PullCut (quando o navegador manda) e `Content-Type: application/json`, o que impede um formulário ou `fetch` simples de outro site de iniciar downloads;
+- só deixa a página ser embutida pelo Painel (`frame-ancestors`); a porta do Painel vem de `painel` no `pullcut.config.json` (padrão `http://127.0.0.1:4700`);
+- na prévia, só repassa endereços externos: nada de `127.0.0.1`, `localhost`, rede local (`10.*`, `192.168.*`, `172.16–31.*`), `169.254.*` nem IPv6 interno, conferido também a cada redirecionamento;
+- devolve erros internos com mensagem genérica; o detalhe fica só no console.
+
+Programas rodando no próprio PC (o Painel, `curl`) continuam falando com a API normalmente. Não é autenticação.
+
 ## Uso responsável
 
 Baixe apenas conteúdo seu, com licença livre (ex.: Creative Commons) ou com autorização do autor, e respeite

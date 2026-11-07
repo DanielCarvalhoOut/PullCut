@@ -10,6 +10,8 @@ import { Readable } from 'node:stream';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
+import net from 'node:net';
+import { lookup } from 'node:dns/promises';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -28,6 +30,77 @@ const DESTINOS = {
 };
 
 const FORMATOS_AUDIO = ['mp3', 'm4a', 'wav'];
+
+// ---------- proteção das rotas ----------
+// Escutar só em 127.0.0.1 não basta: uma página aberta no navegador ainda consegue mandar pedidos para cá.
+// - Host conhecido: barra DNS rebinding (um domínio externo que passa a apontar para 127.0.0.1).
+// - Métodos: só GET, HEAD e POST. OPTIONS (pré-voo de CORS) é recusado, então nenhum outro site ganha licença.
+// - /api/ só da própria origem: Sec-Fetch-Site "cross-site" e "same-site" (outra porta de localhost) são recusados.
+// - POST: Origin, quando vem, tem de ser o PullCut, e o corpo só com Content-Type application/json, que obriga
+//   o navegador a pedir licença (CORS) antes. Um formulário ou fetch "simples" de outro site não chega aqui.
+// - A página só pode ser embutida pelo Painel (aba PullCut), sem clickjacking por outros sites.
+// Pedidos sem Origin (o Painel pelo Node, curl) continuam funcionando. Não é autenticação: qualquer programa
+// rodando no próprio PC ainda pode falar com o PullCut.
+const HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]'].map((h) => `${h}:${PORT}`));
+const ORIGENS = new Set([...HOSTS].map((h) => `http://${h}`));
+const PAINEL = new URL(process.env.PULLCUT_PAINEL || CONFIG.painel || 'http://127.0.0.1:4700');
+const MOLDURA = ['127.0.0.1', 'localhost'].map((h) => `http://${h}:${PAINEL.port || 80}`).join(' ');
+const CABECALHOS = {
+  'Content-Security-Policy': `frame-ancestors 'self' ${MOLDURA}`,
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+  'Cross-Origin-Resource-Policy': 'same-origin',
+};
+
+class ErroHttp extends Error {
+  constructor(status, mensagem) {
+    super(mensagem);
+    this.status = status;
+  }
+}
+
+// Devolve null se o pedido pode seguir, ou [status, mensagem] para recusar.
+function checarPedido(req, rota) {
+  if (!HOSTS.has(String(req.headers.host || '').toLowerCase())) return [421, 'Host não permitido.'];
+  if (!['GET', 'HEAD', 'POST'].includes(req.method)) return [405, 'Método não permitido.'];
+  const site = req.headers['sec-fetch-site'];
+  if (rota.startsWith('/api/') && (site === 'cross-site' || site === 'same-site')) return [403, 'Pedido de outro site recusado.'];
+  if (req.method !== 'POST') return null;
+  const origem = req.headers.origin;
+  // "null" (iframe com sandbox, arquivo local) também cai aqui: não está na lista.
+  if (origem !== undefined && !ORIGENS.has(origem)) return [403, 'Origem não permitida.'];
+  if (site && site !== 'same-origin' && site !== 'none') return [403, 'Pedido de outra origem recusado.'];
+  if (!/^application\/json\s*(;|$)/i.test(req.headers['content-type'] || '')) return [415, 'Use Content-Type: application/json.'];
+  return null;
+}
+
+// A prévia repassa endereços que vêm da página analisada (um site qualquer). Nunca para o próprio PC nem
+// para a rede local: senão uma página maliciosa faria o PullCut ler o Painel, o roteador etc.
+function ipInterno(ip) {
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224;
+  }
+  const v6 = ip.toLowerCase();
+  // IPv4 dentro de IPv6 (::ffff:127.0.0.1, que a URL normaliza para ::ffff:7f00:1): confere o IPv4.
+  const mapeado = v6.match(/^::ffff:(?:([\d.]+)|([\da-f]{1,4}):([\da-f]{1,4}))$/);
+  if (mapeado) {
+    if (mapeado[1]) return ipInterno(mapeado[1]);
+    const [x, y] = [parseInt(mapeado[2], 16), parseInt(mapeado[3], 16)];
+    return ipInterno(`${x >> 8}.${x & 255}.${y >> 8}.${y & 255}`);
+  }
+  return v6 === '::' || v6 === '::1' || /^f[cd]/.test(v6) || /^fe[89ab]/.test(v6) || v6.startsWith('ff');
+}
+
+async function enderecoExterno(texto) {
+  let u;
+  try { u = new URL(texto); } catch { return false; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+  const host = u.hostname.replace(/^\[|\]$/g, '');
+  const ips = net.isIP(host) ? [host] : (await lookup(host, { all: true }).catch(() => [])).map((r) => r.address);
+  return ips.length > 0 && !ips.some(ipInterno);
+}
 
 // FFmpeg pode não estar no PATH de um shell aberto antes da instalação pelo winget.
 function acharFfmpeg() {
@@ -62,9 +135,17 @@ async function lerCorpo(req) {
   let dados = '';
   for await (const parte of req) {
     dados += parte;
-    if (dados.length > 1e5) throw new Error('Corpo grande demais');
+    if (dados.length > 1e5) throw new ErroHttp(413, 'Corpo grande demais.');
   }
-  return dados ? JSON.parse(dados) : {};
+  if (!dados) return {};
+  let corpo;
+  try {
+    corpo = JSON.parse(dados);
+  } catch {
+    throw new ErroHttp(400, 'JSON inválido no corpo.');
+  }
+  if (!corpo || typeof corpo !== 'object' || Array.isArray(corpo)) throw new ErroHttp(400, 'O corpo deve ser um objeto JSON.');
+  return corpo;
 }
 
 function urlValida(texto) {
@@ -177,7 +258,17 @@ async function servirPrevia(req, res, id) {
   const headers = { ...previa.headers, 'Accept-Encoding': 'identity' };
   if (req.headers.range) headers.Range = req.headers.range;
   try {
-    const origem = await fetch(previa.url, { headers, signal: controle.signal });
+    // Segue os redirecionamentos à mão, conferindo cada destino (um redirect também poderia apontar para dentro).
+    let alvo = previa.url;
+    let origem;
+    for (let saltos = 0; ; saltos++) {
+      if (saltos > 5 || !(await enderecoExterno(alvo))) return json(res, 403, { erro: 'Prévia recusada: endereço não permitido.' });
+      origem = await fetch(alvo, { headers, signal: controle.signal, redirect: 'manual' });
+      const proximo = origem.headers.get('location');
+      if (origem.status < 300 || origem.status >= 400 || !proximo) break;
+      await origem.body?.cancel();
+      alvo = new URL(proximo, alvo).href;
+    }
     const repassar = {};
     for (const h of ['content-type', 'content-length', 'content-range', 'accept-ranges']) {
       const v = origem.headers.get(h);
@@ -403,7 +494,19 @@ function abrirNoExplorer(tarefa) {
 // ---------- servidor HTTP ----------
 
 const servidor = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host}`);
+  for (const [k, v] of Object.entries(CABECALHOS)) res.setHeader(k, v);
+  let url;
+  try {
+    url = new URL(req.url, `http://127.0.0.1:${PORT}`);
+  } catch {
+    return json(res, 400, { erro: 'Endereço inválido.' });
+  }
+  const barrado = checarPedido(req, url.pathname);
+  if (barrado) {
+    // Não lê o corpo: responde e fecha a conexão, para o resto não virar o "próximo pedido".
+    if (!req.complete) res.setHeader('Connection', 'close');
+    return json(res, barrado[0], { erro: barrado[1] });
+  }
   try {
     if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -464,7 +567,11 @@ const servidor = http.createServer(async (req, res) => {
     json(res, 404, { erro: 'Não encontrado.' });
   } catch (e) {
     if (res.headersSent) return res.destroy();
-    json(res, 500, { erro: e.message });
+    if (!req.complete) res.setHeader('Connection', 'close');
+    if (e instanceof ErroHttp) return json(res, e.status, { erro: e.message });
+    // O detalhe (caminhos, pilha) fica só no console.
+    console.error(`[pullcut] ${req.method} ${url.pathname}`, e);
+    json(res, 500, { erro: 'Erro interno do PullCut. Veja o console do servidor.' });
   }
 });
 
